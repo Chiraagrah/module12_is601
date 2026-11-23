@@ -1,14 +1,18 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from uuid import UUID
 from typing import List
-from fastapi import Body, FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_active_user
 from app.models.calculation import Calculation
 from app.models.user import User
+from app.operations import add, divide, multiply, subtract
 from app.schemas.calculation import CalculationBase, CalculationResponse, CalculationUpdate
 from app.schemas.token import TokenResponse
 from app.schemas.user import UserCreate, UserResponse, UserLogin
@@ -29,12 +33,43 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+class CalculatorInput(BaseModel):
+    a: float
+    b: float
+
 # ------------------------------------------------------------------------------
 # Health Endpoint
 # ------------------------------------------------------------------------------
 @app.get("/health", tags=["health"])
 def read_health():
     return {"status": "ok"}
+
+# ------------------------------------------------------------------------------
+# Calculator Demo Endpoints
+# ------------------------------------------------------------------------------
+@app.get("/", response_class=FileResponse, include_in_schema=False)
+def calculator_page():
+    template_path = Path(__file__).resolve().parent.parent / "templates" / "index.html"
+    return FileResponse(template_path)
+
+@app.post("/add", include_in_schema=False)
+def calculate_add(data: CalculatorInput):
+    return {"result": add(data.a, data.b)}
+
+@app.post("/subtract", include_in_schema=False)
+def calculate_subtract(data: CalculatorInput):
+    return {"result": subtract(data.a, data.b)}
+
+@app.post("/multiply", include_in_schema=False)
+def calculate_multiply(data: CalculatorInput):
+    return {"result": multiply(data.a, data.b)}
+
+@app.post("/divide", include_in_schema=False)
+def calculate_divide(data: CalculatorInput):
+    try:
+        return {"result": divide(data.a, data.b)}
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
 
 # ------------------------------------------------------------------------------
 # User Registration Endpoint
